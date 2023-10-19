@@ -34,9 +34,17 @@ struct socket_4_tuple {
 */
 struct {
         __uint(type, BPF_MAP_TYPE_HASH);
+        // BPF_MAP_TYPE_HASH 的 key 和 values 可以是任意的数据类型
         __uint(max_entries, SOCKOPS_MAP_SIZE);
         __type(key, struct addr_2_tuple);
         __type(value, struct addr_2_tuple);
+        /*
+        enum libbpf_pin_type {
+        	LIBBPF_PIN_NONE,
+        	/* PIN_BY_NAME: pin maps by name (in /sys/fs/bpf by default)
+        	LIBBPF_PIN_BY_NAME,
+        };
+        */
         __uint(pinning, LIBBPF_PIN_BY_NAME);
 } map_active_estab SEC(".maps");
 
@@ -71,11 +79,15 @@ struct {
 |        B-ip:B-inbound, A-ip:A-envoy-port         |   B-inbound-skops   |    <--- B-inbound passive_estab CB
 |------------------------------------------------------------------------|
 */
+/*
+ 使用 bpf_sock_hash_update 来更新
+ 配合 bpf_sk_redirect_hash 来重定向数据包
+*/
 struct {
         __uint(type, BPF_MAP_TYPE_SOCKHASH);
         __uint(max_entries, SOCKOPS_MAP_SIZE);
         __uint(key_size, sizeof(struct socket_4_tuple));
-        __uint(value_size, sizeof(uint32_t));
+        __uint(value_size, sizeof(uint32_t)); // either __u32 or __u64; the latter (__u64) is to support returning socket cookies to userspace. Returning the struct sock * that the map holds to user-space is neither safe nor useful
         __uint(pinning, LIBBPF_PIN_BY_NAME);
 } map_redir SEC(".maps");
 
@@ -86,11 +98,12 @@ struct {
 |     1     |       bypassed packets number      |
 |------------------------------------------------|
 */
+// https://docs.kernel.org/bpf/map_array.html
 struct {
-        __uint(type, BPF_MAP_TYPE_ARRAY);
+        __uint(type, BPF_MAP_TYPE_ARRAY); // All array elements are pre-allocated and zero initialized when created
         __uint(max_entries, 2);
-        __type(key, uint32_t);
-        __type(value, uint32_t);
+        __type(key, uint32_t); // key 就是数组中的索引（index）（因此 key 一定 是整形），因此无需对 key 进行哈希 . All array elements are pre-allocated and zero initialized at init time. Key is an index in array and can only be 4 bytes (32-bit)
+        __type(value, uint32_t);  // The value stored can be of any size , however, all array elements are aligned to 8 bytes
         __uint(pinning, LIBBPF_PIN_BY_NAME);
 } debug_map SEC(".maps");
 
@@ -107,10 +120,17 @@ static __inline__ void sk_ops_extract4_key(struct bpf_sock_ops *ops,
 static __inline__ void sk_msg_extract4_keys(struct sk_msg_md *msg,
                 struct socket_4_tuple *proxy_key, struct socket_4_tuple *key)
 {
+    // 正向4元祖
     proxy_key->local.ip4 = msg->local_ip4;
+    // local_port stored in host byte order
     proxy_key->local.port = msg->local_port;
     proxy_key->remote.ip4 = msg->remote_ip4;
+    // remote_port Stored in network byte order
+    // bpf_ntohl 是一个用于将 32 位整数从网络字节顺序（大端字节序）转换为主机字节顺序（宿主机的字节序）的 eBPF 辅助函数
+    // bpf_ntohl 只适用于 32 位整数，如果你需要转换其他数据类型，如 16 位整数或 64 位整数，你需要使用相应的函数，如 bpf_ntohs 和 bpf_ntohll
     proxy_key->remote.port = bpf_ntohl(msg->remote_port);
+
+    // 反向4元祖
     key->local.ip4 = msg->remote_ip4;
     key->local.port = bpf_ntohl(msg->remote_port);
     key->remote.ip4 = msg->local_ip4;

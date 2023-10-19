@@ -49,3 +49,15 @@ Debug Log
 #. Read log from kernel tracepipe::
 
     $ sudo cat /sys/kernel/debug/tracing/trace_pipe
+
+
+~# bpftool map dump name debug_map
+[{
+        "key": 0,
+        "value": 1   # 是否使能调试
+    },{
+        "key": 1,
+        "value": 283491    # 数据包成功定向的数量
+    }
+]
+
