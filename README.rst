@@ -61,3 +61,8 @@ Debug Log
     }
 ]
 
+
+~# bpftool map dump name map_active_estab
+
+~# bpftool map dump name map_proxy
+
