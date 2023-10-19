@@ -11,8 +11,10 @@ static inline void bpf_sock_ops_active_establish_cb(struct bpf_sock_ops *skops) 
 
     sk_ops_extract4_key(skops, &key);
 
-    char tuple_info[] = "active data tuple: [%x]:%x->[%x]:%x\n";
-    bpf_trace_printk(tuple_info, sizeof(tuple_info), key.local.ip4, key.local.port ,  key.remote.ip4, key.remote.port  );
+    char tuple_info_src[] = "passive data tuple source: [%x]:%x\n";
+    bpf_trace_printk(tuple_info_src, sizeof(tuple_info_src), key.local.ip4, key.local.port  );
+    char tuple_info_dst[] = "passive data tuple dest: [%x]:%x\n";
+    bpf_trace_printk(tuple_info_dst, sizeof(tuple_info_dst), key.remote.ip4, key.remote.port  );
 
     if (key.local.ip4 == INBOUND_ENVOY_IP) {
         // update the SOCKHASH map ，供后续重定向
@@ -41,8 +43,10 @@ static inline void bpf_sock_ops_passive_establish_cb(struct bpf_sock_ops *skops)
 
     sk_ops_extract4_key(skops, &key);
 
-    char tuple_info[] = "passive data tuple: [%x]:%x->[%x]:%x\n";
-    bpf_trace_printk(tuple_info, sizeof(tuple_info), key.local.ip4, key.local.port ,  key.remote.ip4, key.remote.port  );
+    char tuple_info_src[] = "passive data tuple source: [%x]:%x\n";
+    bpf_trace_printk(tuple_info_src, sizeof(tuple_info_src), key.local.ip4, key.local.port  );
+    char tuple_info_dst[] = "passive data tuple dest: [%x]:%x\n";
+    bpf_trace_printk(tuple_info_dst, sizeof(tuple_info_dst), key.remote.ip4, key.remote.port  );
 
     if (key.remote.ip4 == INBOUND_ENVOY_IP) {
         bpf_sock_hash_update(skops, &map_redir, &key, BPF_ANY);
